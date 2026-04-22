@@ -1,0 +1,245 @@
+Code RL y hệt paper không được public (đó là IP của Dematic). 
+Nhưng có cách chạy baseline flat MARL (IAC/SEAC/SNAC) — chính là các đường đứt nét trong Hình 4 của paper — bằng thư viện của cùng nhóm tác giả.
+
+Thư viện phù hợp nhất — EPyMARL
+
+  EPyMARL do chính nhóm Albrecht/Papoudakis/Schäfer (đồng tác giả paper TA-RWARE) viết, đã implement sẵn:
+
+  - IAC (Independent Actor-Critic)
+  - SEAC (Shared Experience Actor-Critic)
+  - MAPPO, IPPO, QMIX, VDN, v.v.
+
+Và đã tích hợp môi trường RWARE gốc sẵn.
+
+  Repo: https://github.com/uoe-agents/epymarl
+
+  Giới hạn cần biết trước
+
+  ┌─────────────────────────────────┬──────────────────────────┐
+  │               Cái               │         Có/Không         │
+  ├─────────────────────────────────┼──────────────────────────┤
+  │ IAC/SEAC/SNAC flat              │ ✅ có trong EPyMARL      │
+  ├─────────────────────────────────┼──────────────────────────┤
+  │ HIAC/HSNAC/HSEAC (hierarchical) │ ❌ không public anywhere │
+  ├─────────────────────────────────┼──────────────────────────┤
+  │ PTG simulator của Dematic       │ ❌ closed-source         │
+  └─────────────────────────────────┴──────────────────────────┘
+
+Tức bạn có thể tái lập các đường kẻ màu tím/xanh lá cây trong Hình 4 paper (các baseline flat MARL), không tái lập được các đường hierarchical đỏ/cam (đóng
+   góp chính của paper).
+
+Chiến lược cho seminar
+
+  So sánh CTA (heuristic) vs IAC vs SEAC trên TA-RWARE config nhỏ. Đây đã đủ kể 1 câu chuyện: "heuristic chạy tốt nhưng MARL học được chiến lược tốt hơn X%".
+
+  Các bước cụ thể
+
+  1. Clone EPyMARL
+
+  git clone https://github.com/uoe-agents/epymarl
+  cd epymarl
+  pip install -r requirements.txt
+
+  2. Đăng ký TA-RWARE env với EPyMARL
+
+  EPyMARL dùng format observation/reward hơi khác — cần viết 1 wrapper nhỏ biến TA-RWARE (Gymnasium multi-agent tuple) thành format EPyMARL mong đợi. Ngó    
+  file src/envs/gymma.py trong EPyMARL — nó wrap gym.make(...) thành interface chuẩn PyMARL.
+
+  Vì TA-RWARE đã đăng ký dưới dạng gym.make("tarware-tiny-3agvs-2pickers-partialobs-v1"), bạn có thể thử config sẵn:
+
+  # src/config/envs/tarware.yaml
+  env: "gymma"
+  env_args:
+    time_limit: 500
+    key: "tarware-tiny-3agvs-2pickers-partialobs-v1"
+    pretrained_wrapper: null
+
+  3. Train IAC + SEAC
+
+  python src/main.py --config=ia2c --env-config=tarware
+  python src/main.py --config=seac --env-config=tarware
+
+  4. So sánh với heuristic
+
+  Chạy run_heuristic.py của bạn, lấy pick-rate trung bình trên 100 episode với cùng env → so với pick-rate cuối của IAC/SEAC.
+
+  Thực tế về thời gian training
+
+  Paper train 10,000 episode (~vài giờ đến 1 ngày tùy GPU). Với seminar:
+
+  - Kho tiny/small: có thể đủ với 2000-3000 episode, chạy ~1-2h trên CPU.
+  - Nên chỉ làm config tiny để demo được, đừng ôm Large.
+  - Lưu log bằng TensorBoard có sẵn trong EPyMARL → plot đẹp cho slide.
+
+  Lựa chọn thay thế — đơn giản hơn
+
+  Nếu EPyMARL khó debug, dùng Stable-Baselines3 với approach parameter sharing:
+
+  1. Wrap TA-RWARE thành PettingZoo ParallelEnv (có helper supersuit).
+  2. PPO đơn policy dùng chung cho mọi agent (= SNAC flat).
+  3. Code ngắn ~50 dòng, dễ hiểu, dễ trình bày.
+
+  Đổi lại: đây là SNAC flat — trong paper là phương pháp yếu nhất. Nên kết quả có thể KÉM hơn CTA. Đây cũng là 1 insight thú vị cho slide: "shared policy bị 
+  deadlock, cần manager để phân vùng".
+
+  Gợi ý khung slide seminar
+
+  1. Mở bài: bài toán order-picking, KPI pick-rate.
+  2. Baseline heuristic (CTA) trong code gốc — show demo render.
+  3. MARL IAC/SEAC — dùng EPyMARL train.
+  4. Kết quả: bảng + biểu đồ pick-rate theo episode.
+  5. Thảo luận: tại sao MARL thắng (học được phân công), limitation (cần 10k episode, không giải thích được).
+  6. Hướng mở: nếu muốn làm tiếp → hierarchical MARL.
+
+  ---
+  Muốn mình:
+  - Viết thử file wrapper TA-RWARE cho EPyMARL (có thể mất chút debug),
+  - Hoặc viết baseline SL3-PPO đơn giản để bạn chạy ngay?
+
+✻ Worked for 54s
+
+❯ Tôi đã lấy code về để ở E:\Khoa hoc\USTH\Machine Learning\Source\epymarl. Hãy lên kế hoạch các chỉnh sửa cần thiết để chạy đựơc với TA-RWARE. Tôi muốn thử 
+   test, rồi chạy và làm báo cáo
+
+● Mình khảo sát EPyMARL trước khi lên plan.
+
+  Searched for 1 pattern, read 8 files, listed 3 directories (ctrl+o to expand)
+
+● Đã khảo sát xong. TA-RWARE tương thích nguyên gốc với wrapper gymma của EPyMARL — chỉ cần config nhỏ + fix vài chỗ dependency. Lên plan chi tiết.
+
+● Plan chi tiết — chỉnh sửa EPyMARL để chạy TA-RWARE
+
+  Đã khảo sát xong. Tin vui: TA-RWARE tương thích nguyên gốc với gymma wrapper — không cần viết wrapper mới, chỉ cần:
+
+  ┌──────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────┐
+  │                 File                 │                                 Thay đổi                                 │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────┤
+  │ epymarl/requirements.txt             │ Relax PyYAML==5.3.1 → PyYAML>=6.0 (pin cũ không build trên Python 3.11+) │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────┤
+  │ epymarl/src/config/envs/tarware.yaml │ Tạo mới — kế thừa gymma, set key + time_limit mặc định                   │
+  ├──────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────┤
+  │ —                                    │ Không cần sửa code Python nào cả                                         │
+  └──────────────────────────────────────┴──────────────────────────────────────────────────────────────────────────┘
+
+  Lý do tương thích:
+  - TA-RWARE step() trả (obs_tuple, rewards_list, terminateds, terminateds, info) đúng chuẩn Gymnasium.
+  - observation_space / action_space là Tuple — đúng format gymma expect.
+  - Mỗi agent có reward riêng → dùng common_reward=False + scalarisation sum khi cần.
+
+  Tasks đã tạo
+
+  ┌─────┬────────────────────────────────────────┬─────────────────────┐
+  │  #  │               Giai đoạn                │      Ước lượng      │
+  ├─────┼────────────────────────────────────────┼─────────────────────┤
+  │ 1   │ Setup venv + fix PyYAML                │ 30-60m              │
+  ├─────┼────────────────────────────────────────┼─────────────────────┤
+  │ 2   │ Tạo tarware.yaml config                │ 5m                  │
+  ├─────┼────────────────────────────────────────┼─────────────────────┤
+  │ 3   │ Smoke test gymma wrapper               │ 15-30m              │
+  ├─────┼────────────────────────────────────────┼─────────────────────┤
+  │ 4   │ Training thử t_max=50k (crash check)   │ 30-60m              │
+  ├─────┼────────────────────────────────────────┼─────────────────────┤
+  │ 5   │ Full training IA2C + MAPPO + QMIX      │ 4-8h CPU / 1-2h GPU │
+  ├─────┼────────────────────────────────────────┼─────────────────────┤
+  │ 6   │ Evaluation + so sánh với CTA heuristic │ 1-2h                │
+  ├─────┼────────────────────────────────────────┼─────────────────────┤
+  │ 7   │ Plot + viết báo cáo                    │ 2-3h                │
+  └─────┴────────────────────────────────────────┴─────────────────────┘
+
+  Lưu ý chiến lược cho seminar
+
+  Scope gợi ý (thay vì cố reproduce toàn paper):
+  - Chỉ dùng tarware-tiny-3agvs-2pickers-globalobs-v1 — nhanh, dễ fit 1 ngày.
+  - So 3 method: CTA (heuristic) vs IA2C (flat indep) vs MAPPO (CTDE).
+  - Không cố implement HIAC (hierarchical — không public).
+  - Metric chính: pick rate (overall_pick_rate trong info) + clashes.
+
+  Kể câu chuyện gì:
+
+  ▎ "Heuristic đơn giản đạt X order-lines/h. MARL flat (IA2C) đạt Y, MAPPO đạt Z (cao hơn). Paper chứng minh hierarchical còn cải thiện thêm được +28%, nhưng
+  ▎  ngoài scope seminar này."
+
+  Câu hỏi trước khi bắt đầu
+
+  1. Bạn dùng Python nào cho epymarl — muốn dùng lại venv .venv của tarware, hay tạo venv riêng trong epymarl/?
+    - Khuyến nghị: venv chung — giúp import tarware hoạt động trong process epymarl.
+  2. Có GPU NVIDIA không để cài torch CUDA? Nếu không, CPU-only cũng OK nhưng chậm ~3-5 lần.
+  3. Deadline seminar bao lâu? Nếu gấp, scope xuống tiny-only + 1 algorithm.
+
+  Cho mình 3 câu trả lời, rồi start task #1.
+  
+  -----------------------
+  
+   Với deadline 3 ngày + 1 GPU, mình đề xuất scope gọn:
+  ┌───────┬────────────────────────────────────────────┬───────────┬───────┬──────────┐
+  │ Algo  │              Vai trò seminar               │   Steps   │ Seeds │ Time/run │
+  ├───────┼────────────────────────────────────────────┼───────────┼───────┼──────────┤
+  │ IA2C  │ Baseline MARL flat (≈IAC/SNAC trong paper) │ 1,500,000 │ 2     │ ~2-3h    │                                                                        ├───────┼────────────────────────────────────────────┼───────────┼───────┼──────────┤
+  │ MAPPO │ CTDE, SOTA benchmark                       │ 1,500,000 │ 2     │ ~2-3h    │                                                                        └───────┴────────────────────────────────────────────┴───────────┴───────┴──────────┘                                                                      
+Tổng: 4 run × ~2.5h ≈ 10h → chạy qua đêm gọn.                                                           
+  Lý do scope này:
+  - Đủ so sánh có ý nghĩa: 1 flat vs 1 CTDE, cho thấy paradigm khác nhau.
+  - 1.5M step đủ thấy learning curve converge (paper 5M nhưng chủ yếu bão hoà từ 1-2M).
+  - 2 seeds đủ tính confidence interval cơ bản cho slide.
+  - Kho tiny → 1 run nhanh.
+
+  Lệnh chạy
+
+  Chạy sequential (an toàn hơn parallel khi GPU nhỏ):
+
+  python src/main.py --config=ia2c --env-config=tarware with t_max=1500000 use_tensorboard=True use_cuda=True seed=1 save_model=True
+  save_model_interval=250000
+
+  python src/main.py --config=ia2c --env-config=tarware with t_max=1500000 use_tensorboard=True use_cuda=True seed=2 save_model=True
+  save_model_interval=250000
+
+  python src/main.py --config=mappo --env-config=tarware with t_max=1500000 use_tensorboard=True use_cuda=True seed=1 save_model=True
+  save_model_interval=250000
+
+  python src/main.py --config=mappo --env-config=tarware with t_max=1500000 use_tensorboard=True use_cuda=True seed=2 save_model=True
+  save_model_interval=250000
+
+  Giải thích flags:
+  - seed=1/2 → 2 seed để lấy CI.
+  - save_model=True + save_model_interval=250000 → lưu checkpoint mỗi 250k step (để evaluate sau).
+
+  Script chạy tuần tự (tự động)
+
+  Để tiện, mình tạo file run_all.cmd:
+
+● Write(E:/Khoa hoc/USTH/Machine Learning/Source/epymarl/run_all.cmd)
+  ⎿  Wrote 19 lines to ..\epymarl\run_all.cmd
+       1 @echo off
+       2 REM Train IA2C and MAPPO on TA-RWARE tiny, 2 seeds each, 1.5M timesteps.
+       3 REM Total wall time estimate: ~10h on RTX 5060 Ti.
+       4 
+       5 set COMMON=--env-config=tarware with t_max=1500000 use_tensorboard=True use_cuda=True save_model=True save_model_interval=250000
+       6                          
+       7 echo [%date% %time%] Starting IA2C seed=1
+       8 python src/main.py --config=ia2c %COMMON% seed=1                                                                                                           9 
+      10 echo [%date% %time%] Starting IA2C seed=2                                                                                                           
+     … +9 lines (ctrl+o to expand)
+
+● Cách chạy                            
+
+  1. Chạy thử IA2C seed=1 trước ~30 phút xem tốc độ throughput. Nếu chạy thuận lợi:
+     
+  python src/main.py --config=ia2c --env-config=tarware with t_max=300000 use_tensorboard=True use_cuda=True seed=1 save_model=True
+  save_model_interval=100000
+                                           
+  → Từ thời gian 300k step, ngoại suy thời gian 1.5M. Nếu >4h/run thì giảm t_max xuống 1M.
+
+  2. Nếu OK → chạy full bằng:                                                                                                                                  run_all.cmd
+                                                                                                                                                             
+  Nên để chạy qua đêm. Máy không được sleep/ngủ — check Settings → System → Power & battery → Screen and sleep → "When plugged in, PC goes to sleep after" =
+  Never.
+
+  3. Trong khi chờ training, mở TensorBoard ở terminal khác để theo dõi:
+  cd "E:\Khoa hoc\USTH\Machine Learning\Source\epymarl"
+  .venv\Scripts\activate
+  tensorboard --logdir=results/tb_logs --port=6006
+  Rồi mở browser: http://localhost:6006
+
+  ---
+  Bắt đầu bằng lệnh test 300k step trước đi, xem throughput ra sao. Paste lại dòng log cuối cùng có dạng t_env: X / 300000 để mình tính tốc độ và điều chỉnh 
+  plan.

@@ -1,0 +1,106 @@
+Giải thích ý nghĩa từng mục trong Completed Episode 19: | [Overall Pick Rate=21.60]| [Global return=16.10]| [Total shelf deliveries=15.00]| [Total         
+  clashes=65.00]| [Total stuck=7.00] | [FPS = 351.78]                                                                                                        
+                                        
+● Phân tích từng chỉ số:                          
+                                        
+  1. Overall Pick Rate = 21.60             
+                                                                                                                                                             
+  Đơn vị: order-lines / giờ thật        
+                                                                                                                                                             
+  Quy đổi từ total_deliveries và episode_length sang năng suất thực tế:                                                                             
+                                                                                                                                                             
+  pick_rate = 15 × 3600 / (5 × 500) = 21.60                                                                                                                  
+             ↑      ↑        ↑    ↑      
+         delivered giây/h s/step steps                                                                                                                       
+                                                                                   
+  Paper giả định 1 step = 5 giây thực → 1 episode 500 step = 2500 giây = 41.6 phút. Nhân lên 3600s để chuẩn hoá ra "mỗi giờ".
+
+  Ý nghĩa: nếu cho kho này chạy 1 giờ thật với policy này, ước tính giao được ~22 đơn hàng. Đây là KPI chính của bài toán và của paper.
+
+  2. Global return = 16.10
+
+  Đơn vị: tổng reward episode, không có đơn vị vật lý
+
+  Tổng reward cộng lại của tất cả 5 agent trong suốt 500 step:
+
+  return =
+    + 15 × 1.0    (+1 mỗi lần AGV giao shelf mới)
+    + ~8 × 0.1    (+0.1 mỗi lần Picker help load/unload)
+    - 500 × 5 × 0.001   (−0.001/step/agent time penalty)
+  = 15 + 0.8 - 2.5 = ~13.3
+
+  Con số thực tế 16.1 hơi cao hơn vì mỗi delivery có thể đi kèm Picker help + unload reward. Là tín hiệu training — RL tối ưu cái này chứ không tối ưu pick
+  rate trực tiếp.
+
+  Phân biệt với Overall Pick Rate: một là reward (dùng để train), một là KPI (dùng để đánh giá).
+
+  3. Total shelf deliveries = 15.00
+
+  Đơn vị: số shelf đã giao trong episode
+
+  Tổng số lần AGV mang shelf tới goal và drop xuống trong 500 step. Tính tích luỹ bằng cách sum info["shelf_deliveries"] của từng step.
+
+  Dùng để tính pick_rate. Càng cao càng tốt.
+
+  So sánh:
+  - Random policy (mask): ~15
+  - IA2C của bạn: ~15 (ngang random)
+  - Heuristic CTA: ~22
+  - Paper IAC Small (khác kho): ~45
+
+  4. Total clashes = 65.00
+
+  Đơn vị: số lần robot va chạm trong episode
+
+  Đếm mỗi khi 2 robot cố chiếm cùng 1 ô, kích hoạt "fixing_clash" state. Cơ chế A* phải tính lại đường → tốn thời gian.
+
+  Con số 65 là rất cao. Ý nghĩa:
+  - 65 clash / 500 step = trung bình 1 clash mỗi 8 step — robot đang "giật cục" nhiều.
+  - Policy chưa học được phối hợp tránh nhau.
+  - Heuristic CTA thường có clash thấp hơn (~10-20) vì có zone assignment tĩnh cho Picker.
+
+  Clash cao = policy kém hiệu quả. Muốn cải thiện → cần agent học negotiation pattern hoặc dùng hierarchical (Manager phân vùng → ít tranh giành).
+
+  5. Total stuck = 7.00
+
+  Đơn vị: số lần robot kẹt cứng trong episode
+
+  Khi A* không tìm được path (ví dụ bị bao vây bởi các agent khác), agent vào trạng thái "stuck". Sau 1 số step, env reset agent để chọn target khác.
+
+  7 stuck / episode là còn chấp nhận được. Cao hơn (>15) là warning — coordination tệ hoặc map quá đông.
+
+  Stuck khác clash:
+  - Clash: né được, chỉ tính lại đường
+  - Stuck: không có đường, bỏ cuộc, reset target
+
+  6. FPS = 351.78
+
+  Đơn vị: step/giây
+
+  Tốc độ mô phỏng — bao nhiêu step/giây mà máy chạy được. Chỉ đo hiệu năng code, không phải performance của agent.
+
+  FPS = 500 step / 1.42s = 351.78
+
+  1 episode chạy ~1.42 giây khi KHÔNG render. Có --render --delay=0.15 → FPS giảm còn ~5-7 (bị delay giới hạn).
+
+  FPS cao = chạy benchmark nhanh. Không ảnh hưởng quality. Dùng khi so sánh 2 máy hoặc 2 implementation.
+
+  Tóm tắt ưu tiên khi đọc
+
+  ┌────────────────────────┬─────────────────────────────────────────────┐
+  │         Metric         │              Quan tâm khi nào               │
+  ├────────────────────────┼─────────────────────────────────────────────┤
+  │ Overall Pick Rate      │ KPI chính, báo cáo seminar                  │
+  ├────────────────────────┼─────────────────────────────────────────────┤
+  │ Total shelf deliveries │ Same as pick rate (khác đơn vị)             │
+  ├────────────────────────┼─────────────────────────────────────────────┤
+  │ Global return          │ Debug training (có đang cao hơn? tăng dần?) │
+  ├────────────────────────┼─────────────────────────────────────────────┤
+  │ Total clashes          │ Phân tích coordination quality              │
+  ├────────────────────────┼─────────────────────────────────────────────┤
+  │ Total stuck            │ Debug (nếu quá cao → env không solvable)    │
+  ├────────────────────────┼─────────────────────────────────────────────┤
+  │ FPS                    │ Benchmark tốc độ code, không quan trọng     │
+  └────────────────────────┴─────────────────────────────────────────────┘
+
+  Với báo cáo, chỉ cần Pick Rate + Clashes là đủ so sánh các method.

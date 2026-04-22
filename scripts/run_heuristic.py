@@ -24,6 +24,12 @@ parser.add_argument(
         "--render",
         action='store_true',
     )
+parser.add_argument(
+        "--delay",
+        default=0.0,
+        type=float,
+        help="Seconds to sleep after each rendered frame (e.g. 0.1 = ~10 FPS)"
+    )
 
 args = parser.parse_args()
 
@@ -45,12 +51,13 @@ def info_statistics(infos, global_episode_return, episode_returns):
     return last_info
 
 if __name__ == "__main__":
-    env = gym.make("tarware-extralarge-14agvs-7pickers-partialobs-v1")
+    #env = gym.make("tarware-extralarge-14agvs-7pickers-partialobs-v1")
+    env = gym.make("tarware-tiny-3agvs-2pickers-partialobs-v1")
     seed = args.seed
     completed_episodes = 0
     for i in range(args.num_episodes):
         start = time.time()
-        infos, global_episode_return, episode_returns = heuristic_episode(env.unwrapped, args.render, seed+i)
+        infos, global_episode_return, episode_returns = heuristic_episode(env.unwrapped, args.render, seed+i, render_delay=args.delay)
         end = time.time()
         last_info = info_statistics(infos, global_episode_return, episode_returns)
         last_info["overall_pick_rate"] = last_info.get("total_deliveries") * 3600 / (5 * last_info['episode_length'])

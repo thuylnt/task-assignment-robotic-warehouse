@@ -1,0 +1,31 @@
+ia2c_ns hình như là thứ 1
+  python src/main.py --config=ia2c_ns --env-config=tarware with t_max=3000000 use_tensorboard=True use_cuda=True seed=1 save_model=True save_model_interval=500000 standardise_rewards=False entropy_coef=0.03 test_greedy=False
+  lr=0.0005 (hình như)
+  => kém hơn heuristic
+  
+mappo_ns hình như là thứ 2
+  python src/main.py --config=mappo_ns --env-config=tarware with t_max=3000000 use_tensorboard=True use_cuda=True seed=1 save_model=True save_model_interval=500000 standardise_rewards=False entropy_coef=0.03 test_greedy=False
+  eps_clip=0.2 (hình như)
+  lr=0.0003 (hình như)
+  => lung tung
+  
+MAPPO_NS thứ 3
+  python src/main.py --config=mappo_ns --env-config=tarware with t_max=2500000 use_tensorboard=True use_cuda=True seed=1 save_model=True save_model_interval=500000 standardise_rewards=False entropy_coef=0.05 test_greedy=False eps_clip=0.1 lr=0.0001
+  # bị lỗi phải resume
+  python src/main.py --config=mappo_ns --env-config=tarware with t_max=2500000 use_tensorboard=True use_cuda=True seed=1 save_model=True save_model_interval=500000 standardise_rewards=False entropy_coef=0.05 test_greedy=False eps_clip=0.1 lr=0.0001 checkpoint_path="results/models/mappo_ns_seed1_tarware_tarware-tiny-3agvs-2pickers-globalobs-v1_2026-04-22_15-12-51"
+  => ko lung tung nhg kém hơn heuristic
+  
+ia2c_ns thứ 4 (kết quả bằng thứ 1)
+  python src/main.py --config=ia2c_ns --env-config=tarware with t_max=2500000 use_tensorboard=True use_cuda=True seed=2 save_model=True save_model_interval=500000 standardise_rewards=False entropy_coef=0.03 test_greedy=False
+  
+  --------------------
+  Test model
+  
+   :: Xem có render  
+  python view_trained_model.py --run_dir="results/models/ia2c_ns_seed1_tarware_tarware-tiny-3agvs-2pickers-globalobs-v1_2026-04-22_13-01-36" --num_episodes=3 --render --delay=0.15                   
+
+  python view_trained_model.py --run_dir="results/models/mappo_ns_seed1_tarware_tarware-tiny-3agvs-2pickers-globalobs-v1_2026-04-22_15-48-13" --num_episodes=3 --render --delay=0.15   
+   
+  :: Hoặc benchmark 20 episode không render                                                                                                                 
+ 
+  python view_trained_model.py --run_dir="results/models/ia2c_ns_seed2_tarware_tarware-tiny-3agvs-2pickers-globalobs-v1_2026-04-22_16-30-47" --num_episodes=20

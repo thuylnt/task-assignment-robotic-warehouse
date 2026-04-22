@@ -1,0 +1,106 @@
+Tôi đã chạy đựơc 3/4 train. Đầu tiên, hãy nói ý nghĩa của việc thiết kế các train. Tôi đang train với loại tiny?
+
+● Bạn đang train trên kho tarware-tiny-3agvs-2pickers-globalobs-v1
+
+  Breakdown tên env:
+  - tiny = kho cỡ nhỏ, 3 cụm rack × 8 shelf/cụm ≈ 48 shelf.
+  - 3agvs = 3 AGV.
+  - 2pickers = 2 Picker.
+  - globalobs = observation toàn cục (mọi agent thấy toàn bộ kho) — dễ học hơn partial.
+  - v1 = version 1.               
+
+  Lý do chọn tiny:                                                                                                                                             
+  - Ít agent + ít shelf → action space nhỏ (~50 action thay vì ~500) → train nhanh.
+  - 1 run 1.5M step chỉ ~2-3h trên RTX 5060 Ti. 4 run = 10h, vừa vặn deadline 3 ngày.                                                                        
+  - Đủ minh hoạ khác biệt RL vs heuristic. Paper cũng báo cáo số liệu cho Small (tương đương tiny).
+
+  Ý nghĩa thiết kế 4 training run
+
+  Bảng kế hoạch train
+
+  ┌─────┬───────────┬──────┬───────┬─────────────────────────────────┐
+  │ Run │ Algorithm │ Seed │ t_max │             Vai trò             │
+  ├─────┼───────────┼──────┼───────┼─────────────────────────────────┤
+  │ 1   │ IA2C      │ 1    │ 1.5M  │ Baseline MARL flat              │
+  ├─────┼───────────┼──────┼───────┼─────────────────────────────────┤
+  │ 2   │ IA2C      │ 2    │ 1.5M  │ Xác nhận IA2C không do may mắn  │
+  ├─────┼───────────┼──────┼───────┼─────────────────────────────────┤
+  │ 3   │ MAPPO     │ 1    │ 1.5M  │ CTDE, baseline "nâng cao"       │
+  ├─────┼───────────┼──────┼───────┼─────────────────────────────────┤
+  │ 4   │ MAPPO     │ 2    │ 1.5M  │ Xác nhận MAPPO không do may mắn │
+  └─────┴───────────┴──────┴───────┴─────────────────────────────────┘
+
+  Đây là thiết kế thí nghiệm tối giản nhưng đủ để có bài seminar.
+
+  Tại sao 2 algorithm?
+
+  Không phải chạy 1 — chạy 2 để kể câu chuyện so sánh:
+
+  ┌───────┬───────────────────────────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────┐   
+  │ Algo  │                                       Đặc điểm                                        │                Trong paper tương ứng                 │   
+  ├───────┼───────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┤   
+  │ IA2C  │ Flat, mỗi agent độc lập, không thấy agent khác trong training signal.                 │ ≈ IAC (1 trong 3 baseline flat của paper)            │   
+  ├───────┼───────────────────────────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────┤   
+  │ MAPPO │ CTDE (Centralized Training, Decentralized Execution). Critic thấy state toàn cục khi  │ Gần với phong cách hierarchical trong paper, dù      │   
+  │       │ train → học nhanh hơn, phối hợp tốt hơn. Khi chạy thật mỗi agent vẫn phân tán.        │ paper dùng kiến trúc khác (manager/worker).          │   
+  └───────┴───────────────────────────────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────────┘   
+
+  → Bạn có thể kể câu chuyện: "Flat MARL đã vượt heuristic X%, nhưng thêm centralized critic (MAPPO) còn vượt thêm Y%".
+
+  Tại sao 2 seed cho mỗi algo?
+
+  RL phụ thuộc nặng vào random seed. Một run xui có thể ra kết quả kém hơn thực tế 20-30%. Chạy nhiều seed rồi lấy trung bình mới đáng tin.
+
+  Paper chạy 5 seed — chuẩn nghiên cứu. Seminar 2 seed là tối thiểu chấp nhận được (để có "error bar" trên biểu đồ). Nhiều hơn sẽ tốt hơn nhưng không đủ thời
+   gian.
+
+  Kết quả sẽ được báo cáo dạng:
+
+  ▎ IA2C đạt pick-rate trung bình X ± Y trên 2 seed, với Y = nửa khoảng giữa 2 seed.
+
+  Tại sao 1.5M step?
+
+  Paper train 10,000 episode × 500 step = 5M step. Ta scale xuống 1.5M vì:
+
+  1. Kho tiny hội tụ nhanh hơn kho lớn — action space nhỏ → học xong sớm.
+  2. Biểu đồ learning curve có phần flat sau 1M step → phần sau chỉ tinh chỉnh, không cần thiết cho demo.
+  3. Thời gian có hạn — thêm 1M step mỗi run = thêm 4h tổng → không kịp deadline.
+
+  Trade-off chấp nhận được vì mục tiêu seminar là demo RL vs heuristic, không phải reproduce chính xác số liệu paper.
+
+  Tại sao global observation?
+
+  Có 2 lựa chọn:
+  - partial: agent chỉ thấy một phần state (không biết AGV khác đang cầm kệ không).
+  - global: agent thấy toàn bộ.
+
+  Chọn global vì:
+  - Dễ học hơn → hội tụ trong 1.5M step.
+  - Paper cũng báo kết quả tốt trên cả 2, nhưng global làm baseline rõ ràng hơn để so sánh.
+  - Partial là bài toán khó hơn (Partial Observability) — không phải điểm chính của seminar này.
+
+  Đầu ra training cuối cùng sẽ có
+
+  1. 4 learning curves (IA2C×2 seeds + MAPPO×2 seeds) — đường cong reward/pick-rate theo step.
+  2. 4 model checkpoint cuối cùng — dùng để evaluate 100 episode → lấy số cuối để so heuristic.
+  3. Log TensorBoard đầy đủ — có thể screenshot cho slide.
+
+  Câu chuyện cuối cùng bạn sẽ kể
+
+  [Slide 1] Bài toán: kho + order-picking, KPI pick-rate.
+
+  [Slide 2] Baseline heuristic CTA:
+            - Greedy nearest + A*
+            - Pick-rate trên tiny = ~? order-lines/giờ
+
+  [Slide 3] MARL IA2C (flat):
+            - Learning curve → hội tụ tại ~?
+            - Tăng Y% so heuristic
+
+  [Slide 4] MARL MAPPO (CTDE):
+            - Critic chung → tăng thêm Z%
+
+  [Slide 5] Paper đi xa hơn nữa: Hierarchical MARL → +28%
+            (ngoài scope seminar do chưa có code)
+
+  [Slide 6] Kết luận + limitations + future work.

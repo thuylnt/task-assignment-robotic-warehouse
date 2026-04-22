@@ -1,0 +1,96 @@
+● Hướng dẫn chi tiết chạy project TA-RWARE trên Windows (bash/Git Bash hoặc PowerShell):
+1. Yêu cầu trước khi cài
+  - Python 3.9–3.11 (pyproject khai báo 3.9; pyglet==1.5.11 và networkx==3.2.1 không tương thích tốt với Python ≥ 3.12).                                     
+  - Git đã cài sẵn (vì dependency pyastar2d được lấy từ GitHub).                                                                                               
+  - Trình biên dịch C (pyastar2d có phần C extension): cài Microsoft C++ Build Tools (Visual Studio Installer → "Desktop development with C++"). 
+  https://visualstudio.microsoft.com/visual-cpp-build-tools/
+  Chi tiết tham khảo thêm bên dứơi
+  
+Nếu không build được, sẽ lỗi khi pip install. 
+  Kiểm tra:                                             
+  python --version
+  git --version
+
+2. Tạo virtual environment
+  Mở terminal ngay tại thư mục project:
+  cd "E:/Khoa hoc/USTH/Machine Learning/Source/task-assignment-robotic-warehouse"
+  python -m venv .venv
+ 
+  Kích hoạt venv:
+  - Git Bash: source .venv/Scripts/activate
+  - PowerShell: .venv\Scripts\Activate.ps1 (nếu bị chặn: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned)
+  - CMD: .venv\Scripts\activate.bat
+
+  Sau khi kích hoạt, prompt sẽ có tiền tố (.venv).
+
+3. Cài đặt package
+
+  python -m pip install --upgrade pip setuptools wheel
+  pip install -e .
+
+  Lệnh -e . cài theo mode editable dựa trên pyproject.toml, tự động kéo về: numpy, gymnasium, six==1.16.0, pyglet==1.5.11, networkx==3.2.1, và pyastar2d     
+  (build từ GitHub).
+
+  Nếu lỗi build pyastar2d → thiếu C++ Build Tools (xem bước 1).   
+
+4. Chạy heuristic demo
+
+  File script có sẵn: scripts/run_heuristic.py. 
+  Lưu ý script hard-code env tarware-extralarge-14agvs-7pickers-partialobs-v1 (kho cỡ lớn — chậm hơn).
+
+  Chạy 10 episode có render:
+  python scripts/run_heuristic.py --num_episodes=10 --seed=0 --render
+  python scripts/run_heuristic.py --num_episodes=10 --seed=0 --render --delay=0.15
+
+  Không render (nhanh hơn, dùng benchmark):
+  python scripts/run_heuristic.py --num_episodes=10 --seed=0
+
+5. Chạy trên môi trường nhỏ hơn (tuỳ chọn)
+
+  Muốn thử nhanh với kho nhỏ như trong README, sửa dòng 48 trong scripts/run_heuristic.py:
+  env = gym.make("tarware-tiny-3agvs-2pickers-partialobs-v1")
+
+  Hoặc viết script riêng theo ví dụ README (import tarware, gym.make(...), env.reset(), env.step(), env.render()).
+
+6. Thoát venv
+
+  deactivate  
+  
+--------------------------------------------------
+Không cần cài full workload — Python extension chỉ cần compiler + SDK. Vào tab Individual components và chỉ tick 2 mục:                                    
+
+Tick bắt buộc (chỉ 2 mục)                                                                                                                                     
+  1. MSVC v143 - VS 2022 C++ x64/x86 build tools (phiên bản latest)                                                                                            
+  2. Windows 11 SDK (bản mới nhất, ví dụ 10.0.22621.xxxx) — nếu máy Windows 10 thì chọn Windows 10 SDK.   
+  Tổng dung lượng khoảng 3–4 GB, thay vì ~8–10 GB nếu chọn nguyên workload "Desktop development with C++".
+Cách làm
+
+  1. Mở Visual Studio Installer → chọn Modify trên Build Tools.
+  2. Bỏ qua tab "Workloads", chuyển sang tab Individual components.
+  3. Gõ search "MSVC v143" → tick ô MSVC v143 - VS 2022 C++ x64/x86 build tools (Latest).
+  4. Search "Windows 11 SDK" → tick 1 phiên bản mới nhất.
+  5. Bấm Install/Modify → đợi xong → mở terminal mới (để PATH cập nhật).
+
+Kiểm tra
+
+  Trong cmd mới:
+  where cl
+  Nếu ra đường dẫn ...\VC\Tools\MSVC\...\cl.exe là OK. Nếu chưa, mở "x64 Native Tools Command Prompt for VS 2022" (có trong Start Menu sau khi cài) để chạy  
+  pip install.
+
+  Lưu ý
+
+  - Không cần: CMake, ATL, MFC, Clang, C++/CLI, Test adapter, v.v. — những thứ này khá nặng và không liên quan Python extension.
+  - Không cần cài cả "Workload Desktop development with C++".
+
+  Sau khi cài xong, quay lại:
+  pip install numpy cython wheel
+  pip install -e . --no-build-isolation
+  
+  
+  Hoặc mở start-> mở "x64 Native Tools Command Prompt for VS 2022" 
+   cd /d "E:\Khoa hoc\USTH\Machine Learning\Source\task-assignment-robotic-warehouse"
+  .venv\Scripts\activate
+  set CL=/permissive-
+  pip install git+https://github.com/raulsteleac/pyastar2d_TARWARE --no-build-isolation
+  pip install -e . --no-build-isolation

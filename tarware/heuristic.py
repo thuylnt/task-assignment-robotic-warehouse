@@ -1,4 +1,5 @@
 
+import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
@@ -23,7 +24,7 @@ class Mission:
     assigned_time: int
     at_location: bool = False
 
-def heuristic_episode(env, render=False, seed=None):
+def heuristic_episode(env, render=False, seed=None, render_delay=0.0):
     # non_goal_location_ids corresponds to the item ordering in `get_empty_shelf_information`
     non_goal_location_ids = []
     for id_, coords in env.action_id_to_coords_map.items():
@@ -134,6 +135,8 @@ def heuristic_episode(env, render=False, seed=None):
         # macro_action should be the index of self.action_id_to_coords_map
         if render:
             env.render(mode="human")
+            if render_delay > 0:
+                time.sleep(render_delay)
 
         _, reward, terminated, truncated, info = env.step(list(actions.values()))
         done = terminated or truncated

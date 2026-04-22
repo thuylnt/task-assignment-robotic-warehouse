@@ -1,0 +1,143 @@
+  ✔ Setup venv chung + fix PyYAML pin
+  ✔ Tạo src/config/envs/tarware.yaml
+  ✔ Smoke test gymma wrapper
+  ✔ Training run ngắn (t_max=50k) cho IA2C 
+  ◼ Full training IA2C + MAPPO + QMIX
+  ◻ Evaluation + so sánh heuristic vs RL
+  ◻ Plot + viết báo cáo seminar 
+  
+  --------------------------------------
+
+
+Khác biệt lớn nhất với ML thông thường: không có dataset sẵn                                                                                               
+     
+  Học môn ML bạn quen với kiểu supervised learning: có tập (X, y) cho trước, model học để f(X) ≈ y. Ở đây không có dataset — agent tự sinh ra data bằng cách   chơi trong môi trường.
+
+  Vòng lặp train RL (áp dụng cho tất cả algo)                                                                                                                                                                                                        
+  lặp lại hàng triệu lần:                                                                                                                                        
+  1. Quan sát trạng thái hiện tại của kho        s_t
+    2. Neural net (policy) sinh ra hành động       a_t ← π(s_t)                                                                                                  
+	3. Môi trường TA-RWARE thực thi hành động      → s_{t+1}, r_t                                                                                                
+	4. Lưu bộ tuple (s_t, a_t, r_t, s_{t+1})       vào buffer                                                                                                    
+	5. Cứ vài chục bước, dùng buffer update NN     để max reward                                                                                                                                                                                                                                                          
+  Dữ liệu "huấn luyện" = chính các tuple (state, action, reward, next_state) tự agent sinh ra. Không có ai label cả. Reward chính là tín hiệu học.
+
+  Cụ thể trong TA-RWARE
+
+  State (s_t) — input của neural net
+
+  Với globalobs, mỗi AGV/Picker thấy:
+  - Vị trí (x, y) hiện tại và target của mọi agent khác.
+  - AGV có đang cầm shelf không? Shelf đó có requested không?
+  - Trạng thái từng ô shelf (trống? có kệ? có kệ đang request?)
+
+  Flatten thành vector ~vài trăm chiều.
+
+  Action (a_t) — output của neural net
+
+  Một số nguyên từ 0 đến ~80 (tùy kho): tương ứng với "đi đến ô nào?" (Shelf location / Goal location). Đây là Task Assignment action space — điểm đặc biệt  
+  của TA-RWARE.
+
+  Neural net output softmax trên 80+ action → sample action.
+
+  Reward (r_t) — tín hiệu học
+
+  Trong TA-RWARE:
+  - AGV giao shelf thành công: +1
+  - Picker giúp load/unload: +0.1
+  - Mỗi step bất kỳ: -0.001 (phạt thời gian)
+
+  Agent học để tối đa tổng reward dài hạn → gián tiếp max pick-rate.
+
+  Neural network (thứ được train)
+
+  Với IA2C, mỗi agent có 2 mạng:
+  - Actor π(a|s): nhận state, output phân phối action.
+  - Critic V(s): nhận state, ước lượng "trạng thái này tốt bao nhiêu?" (expected future reward).
+
+  Cả 2 là MLP ~2-3 layer 64-128 neuron (nhỏ). Trong ia2c.yaml: hidden_dim: 128, có RNN để nhớ quá khứ.
+
+  Thuật toán cụ thể
+
+  IA2C (Independent Actor-Critic)
+
+  Mỗi agent train độc lập, coi các agent khác như một phần của môi trường.
+
+  Update rule (đơn giản):
+  advantage A = r_t + γ V(s_{t+1}) - V(s_t)       # có tốt hơn expected không?
+  loss_actor  = -log π(a_t|s_t) · A               # tăng xs action tốt
+  loss_critic = (V(s_t) - target)²                # critic học predict tốt hơn
+
+  Khiếm khuyết: agent không biết agent khác đang làm gì → khó phối hợp.
+
+  MAPPO (Multi-Agent PPO)
+
+  Thêm 1 thứ: critic thấy toàn cục (state chung của mọi agent), nhưng actor chỉ thấy local. Đây gọi là Centralized Training, Decentralized Execution (CTDE): 
+
+  Actor mỗi agent     : chỉ thấy obs của mình         → output action
+  Critic chung/riêng  : thấy state toàn bộ (cheat!)   → advantage chính xác hơn
+
+  Khi deploy thật (execution), chỉ dùng actor → mỗi agent vẫn chạy phân tán như bình thường. Nhưng lúc train, critic có thông tin đầy đủ → training tín hiệu 
+  chất lượng hơn → hội tụ nhanh hơn.
+
+  PPO thêm "clipping" để update ổn định — chi tiết kỹ thuật không quan trọng cho seminar.
+
+  Data flow trong 1 training run
+
+  Bắt đầu:
+    policy NN init random → AGV đi loạn xạ, pick-rate ~0
+
+  Sau 10k step (~20 episode):
+    NN học: "đi tới goal → +1 reward" → pick-rate ~10 đơn/h
+
+  Sau 500k step:
+    NN học: "Picker gần AGV load nhanh hơn" → pick-rate ~40
+
+  Sau 1.5M step:
+    NN đã hội tụ gần tối ưu → pick-rate ~60-80 (tùy algo, theo paper)
+
+  Mỗi episode = 500 step, tức 1.5M step ≈ 3000 episode training.
+
+  So sánh với heuristic CTA
+
+  Heuristic CTA (code bạn đã chạy): không train gì cả. Rule-based: greedy nearest + A*. Pick-rate cố định ~52 (tiny Small theo paper).
+
+  RL (IA2C/MAPPO): train từ 0 → qua trial-and-error học ra policy tốt hơn. Paper đạt ~65-67 trên cùng config → vượt CTA ~26%.
+
+  Câu chuyện seminar:
+
+  ▎ "Heuristic phản ứng tức thời theo rule. RL dành hàng triệu step thử-sai để học ra chiến lược — tìm được pattern mà rule cứng không thấy, nên pick-rate   
+  ▎ cao hơn."
+
+  Bạn thấy gì khi chạy train
+
+  Trong terminal sẽ in dòng kiểu:
+  t_env: 50000 / 1500000
+  Estimated time left: 2:35:41
+  Recent stats | train_return_mean: 42.3 | test_return_mean: 48.1 | ep_length_mean: 500
+
+  - train_return_mean = tổng reward/episode (training)
+  - test_return_mean = tổng reward khi evaluate (greedy, không explore)
+  - Tăng dần theo thời gian = đang học.
+
+  TensorBoard vẽ cái này thành đường cong, đó là figure quan trọng nhất trong báo cáo — chứng minh model hội tụ.
+
+  Tóm gọn
+
+  ┌────────────────┬─────────────────────────────────────────────┐
+  │   Thành phần   │                    Là gì                    │
+  ├────────────────┼─────────────────────────────────────────────┤
+  │ Dataset        │ Không có sẵn. Agent tự sinh trong khi chơi. │
+  ├────────────────┼─────────────────────────────────────────────┤
+  │ Input          │ State kho (vị trí agent, trạng thái shelf). │
+  ├────────────────┼─────────────────────────────────────────────┤
+  │ Output         │ Action (đi tới ô nào).                      │
+  ├────────────────┼─────────────────────────────────────────────┤
+  │ Tín hiệu học   │ Reward từ env (+1 giao, -0.001/step).       │
+  ├────────────────┼─────────────────────────────────────────────┤
+  │ Thứ được train │ Neural network policy + critic.             │
+  ├────────────────┼─────────────────────────────────────────────┤
+  │ Thuật toán     │ IA2C (flat, độc lập) hoặc MAPPO (CTDE).     │
+  ├────────────────┼─────────────────────────────────────────────┤
+  │ Mục tiêu       │ Max tổng reward → max pick-rate.            │
+  └────────────────┴─────────────────────────────────────────────┘

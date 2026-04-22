@@ -1,0 +1,92 @@
+ý nghĩa các con số trong 2 bảng ở file md là gì
+
+● Các con số đều là pick rate đơn vị order-lines / giờ
+
+  Đây là KPI chính của kho — số "dòng đơn" (order-line) hoàn thành mỗi giờ thật. 1 order-line = 1 mặt hàng được chốt giao cho khách.
+
+  Cách đo trong paper (đã ghi trong code run_heuristic.py):
+  pick_rate = total_deliveries × 3600 / (5 × episode_length)
+  - 3600 giây = 1 giờ.
+  - 5 = mỗi step mô phỏng ~5 giây thực.
+  - episode_length = số step.
+
+  Ý nghĩa các cột
+
+  Bảng 1 — Dematic PTG
+
+  ┌──────────┬────────────────────────────────────────────────────────────────┬─────────────────────────────────────────┐
+  │   Cột    │                             Kho gì                             │               Kích thước                │
+  ├──────────┼────────────────────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Small    │ Kho nhỏ                                                        │ 2 lối đi, 200 item, 4 picker + 8 AGV    │
+  ├──────────┼────────────────────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Medium   │ Kho vừa                                                        │ 10 lối đi, 400 item, 6 picker + 12 AGV  │
+  ├──────────┼────────────────────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Large    │ Kho lớn                                                        │ 22 lối đi, 1276 item, 8 picker + 16 AGV │
+  ├──────────┼────────────────────────────────────────────────────────────────┼─────────────────────────────────────────┤
+  │ Disjoint │ Kho chia 2 khu (vd: hàng thường + hàng đông lạnh) nối bằng cầu │ 12+12 lối, 1392 item, 4 picker + 16 AGV │
+  └──────────┴────────────────────────────────────────────────────────────────┴─────────────────────────────────────────┘
+
+  Con số ~1000-1400 lớn vì PTG: 1 picker nhặt nhiều item liên tục dọc đường đi, mỗi lần giao về goal chứa nhiều order-line.
+
+  Bảng 2 — TA-RWARE (GTP)
+
+  ┌───────┬─────────┬─────────────────────────────────────────────────┐
+  │  Cột  │ Kho gì  │                   Kích thước                    │
+  ├───────┼─────────┼─────────────────────────────────────────────────┤
+  │ Small │ Kho nhỏ │ 2 rack row × 5 col, 160 item, 4 picker + 8 AGV  │
+  ├───────┼─────────┼─────────────────────────────────────────────────┤
+  │ Large │ Kho lớn │ 4 rack row × 7 col, 448 item, 7 picker + 16 AGV │
+  └───────┴─────────┴─────────────────────────────────────────────────┘
+
+  Con số ~50-90 nhỏ hơn PTG nhiều vì GTP: AGV phải chở cả kệ đi một vòng (đến picker bot → goal → trả kệ). Throughput thấp hơn vì có thời gian di chuyển kệ. 
+
+  Cách đọc dòng
+
+  Lấy ví dụ dòng HSEAC ở bảng 1:
+
+  ▎ Small: 1028.2 | Medium: 1242.1 | Large: 1370.9 | Disjoint: 803.5
+
+  Nghĩa là: agent train bằng thuật HSEAC đạt 1242 order-lines/giờ trên kho Medium, 1370 order-lines/giờ trên kho Large, v.v. Đây là trung bình 50 episode    
+  cuối sau 10k episode train, với 5 seed khác nhau (paper có ±95% CI đi kèm nhưng mình bỏ cho gọn).
+
+  So sánh dọc cột để thấy method nào thắng
+
+  Ví dụ cột Large bảng 1:
+  - FM (heuristic) = 1230
+  - PDM (heuristic) = 1124
+  - IAC (MARL flat) = 1264
+  - HSEAC (MARL hierarchical, đề xuất) = 1371
+
+  → HSEAC thắng heuristic tốt nhất (FM) khoảng (1371-1230)/1230 = +11.4%.
+
+  Cột Disjoint bảng 1:
+  - FM = 568 (rất kém vì heuristic không xử lý tốt kho chia 2 khu)
+  - PDM = 677
+  - HSEAC = 803
+
+  → +41% so FM. Đây là case MARL sáng nhất — heuristic tay không giải được.
+
+  Ý nghĩa thực tế con số
+
+  Với kho GTP Large:
+  - Heuristic CTA: 67 order-lines/giờ → 1 ngày 24h = ~1600 đơn.
+  - HIAC (MARL): 86 order-lines/giờ → 1 ngày = ~2064 đơn.
+
+  Tăng 28% throughput = ~460 đơn/ngày thêm mà không cần thêm robot, không thay layout, chỉ cần đổi chiến lược điều phối. Với kho thương mại chạy 24/7 trong  
+  nhiều năm → giá trị kinh tế rất lớn. Đó là lý do Dematic tài trợ nghiên cứu này.
+
+  Tóm lại
+
+  ┌────────────────────────────────────────┬────────────────────────────────────────────────────────────────┐
+  │                Câu hỏi                 │                            Trả lời                             │
+  ├────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Con số là gì?                          │ Pick rate = order-lines/giờ hoàn thành được.                   │
+  ├────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Cao hay thấp tốt?                      │ Cao hơn = tốt hơn (throughput cao).                            │
+  ├────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Vì sao PTG ~1000, GTP ~70?             │ Cơ chế picking khác nhau, PTG nhặt nhiều item/chuyến.          │
+  ├────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ So sánh method nào?                    │ Đọc theo cột, trong cùng cột thì method có số cao hơn = thắng. │
+  ├────────────────────────────────────────┼────────────────────────────────────────────────────────────────┤
+  │ Cột Small/Medium/Large/Disjoint là gì? │ Các cấu hình kho khác nhau (size, layout).                     │
+  └────────────────────────────────────────┴────────────────────────────────────────────────────────────────┘
